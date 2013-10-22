@@ -98,11 +98,6 @@
 (define-type Result
   [v*s (value : ValueC) (store : Store)])
 
-;;this will translate from parseltounge core ops to racket procedures
-;; symbol -> procedure
-;;(define (get-operator [op : symbol])
-;;  ...)
-
 (define (interp-full [exprC : ExprC] [env : Env] [store : Store]) : Result
   (type-case ExprC exprC
 ;; TODO: implement all remaining cases of ExprC; you will certainly
@@ -116,19 +111,20 @@
     [SeqC (e1 e2) (type-case Result (interp-full e1 env store)
                     [v*s (v-e1 s-e1)
                          (interp-full e2 env s-e1)])]
-;    [Prim2C (op arg1 arg2) (let ([op-r
-;                                  ;; we need to translate parseltounge ops to racket ops
-;                                  (cond
-;                                    [(symbol=? op 'string+) ]
-;                                    [(symbol=? op 'num+) +]
-;                                    [(symbol=? op 'num-) -]
-;                                    [(symbol=? op '==) equal?]
-;                                    [(symbol=? op '<) <]
-;                                    [(symbol=? op '>) >])])
-;                             (type-case Result (interp-full arg1 env store)
-;                             [v*s (v-arg1 s-arg1) 
-;                                  (type-case Result (interp-full arg2 env s-arg1)
-;                                    [v*s (v-arg2 s-arg2) (v*s (op-r v-arg1 v-arg2) s-arg2)])]))]
+    [Prim2C (op arg1 arg2) (type-case Result (interp-full arg1 env store)
+                             [v*s (v-arg1 s-arg1) 
+                                  (type-case Result (interp-full arg2 env s-arg1)
+                                    [v*s (v-arg2 s-arg2) 
+                                       (cond
+                                         ;;TODO: Not sure if this is working at this point... the boolean returns definately is not
+                                         ;;it is weird because ValueC has TrueV and FalseV, instead of general Bool.
+                                         [(symbol=? op 'string+) (v*s (NumV (+ (NumV-n v-arg1) (NumV-n v-arg2))) s-arg2)]
+                                         [(symbol=? op 'num+) (v*s (NumV (+ (NumV-n v-arg1) (NumV-n v-arg2))) s-arg2)]
+                                         [(symbol=? op 'num-) (v*s (NumV (- (NumV-n v-arg1) (NumV-n v-arg2))) s-arg2)]
+                                         ;[(symbol=? op '==) (v*s (NumV (equal? (NumV-n v-arg1) (NumV-n v-arg2))) s-arg2)]
+                                         ;[(symbol=? op '<) (v*s (NumV (< (NumV-n v-arg1) (NumV-n v-arg2))) s-arg2)]
+                                         ;[(symbol=? op '>) (v*s (NumV (> (NumV-n v-arg1) (NumV-n v-arg2))) s-arg2)])
+                                         )])])]
     [else (interp-error (string-append "Haven't covered a case yet:"
                                        (to-string exprC)))]))
 

@@ -98,12 +98,37 @@
 (define-type Result
   [v*s (value : ValueC) (store : Store)])
 
+;;this will translate from parseltounge core ops to racket procedures
+;; symbol -> procedure
+;;(define (get-operator [op : symbol])
+;;  ...)
+
 (define (interp-full [exprC : ExprC] [env : Env] [store : Store]) : Result
   (type-case ExprC exprC
 ;; TODO: implement all remaining cases of ExprC; you will certainly
 ;;       want helper functions (like the Lookup metafunction
 ;;       described in the ParselTongue specifictaion!)    
     [NumC (n) (v*s (NumV n) store)]
+    [StrC (s) (v*s (StrV s) store)]
+    [TrueC () (v*s (TrueV) store)]
+    [FalseC () (v*s (FalseV) store)]
+    [IdC (id) (v*s (store-lookup (env-lookup id env) store) store)]
+    [SeqC (e1 e2) (type-case Result (interp-full e1 env store)
+                    [v*s (v-e1 s-e1)
+                         (interp-full e2 env s-e1)])]
+;    [Prim2C (op arg1 arg2) (let ([op-r
+;                                  ;; we need to translate parseltounge ops to racket ops
+;                                  (cond
+;                                    [(symbol=? op 'string+) ]
+;                                    [(symbol=? op 'num+) +]
+;                                    [(symbol=? op 'num-) -]
+;                                    [(symbol=? op '==) equal?]
+;                                    [(symbol=? op '<) <]
+;                                    [(symbol=? op '>) >])])
+;                             (type-case Result (interp-full arg1 env store)
+;                             [v*s (v-arg1 s-arg1) 
+;                                  (type-case Result (interp-full arg2 env s-arg1)
+;                                    [v*s (v-arg2 s-arg2) (v*s (op-r v-arg1 v-arg2) s-arg2)])]))]
     [else (interp-error (string-append "Haven't covered a case yet:"
                                        (to-string exprC)))]))
 

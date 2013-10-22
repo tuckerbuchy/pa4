@@ -31,11 +31,10 @@
 
 ; produce a fresh location not presently in the store
 (define (fresh-loc [store : Store]) : Location
- ;; TODO: implement me!
+  (length store))
  ;; Hint: can you find out what the largest
  ;; location in the store is?  Once you have
  ;; that, can you calculate a fresh location?
- 0)
 
 ; update the store to contain the given value at the given location
 ; PRESENTLY: no check that the location already exists
@@ -57,8 +56,8 @@
 ; We may want to add that in the future.
 (define (alloc-store [value : ValueC]
                     [store : Store]) : (Location * Store)
- ;; TODO: implement me!
- (values 0 empty-store))
+  (let ([new-loc (fresh-loc store)])
+    (values new-loc (update-store new-loc value store))))
 
 
 (module+ test

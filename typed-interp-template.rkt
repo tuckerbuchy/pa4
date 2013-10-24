@@ -98,6 +98,26 @@
 (define-type Result
   [v*s (value : ValueC) (store : Store)])
 
+
+;;;;;;;;;;;;;;;;;;HELPERS;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(define (interp-addition [v-arg1 : ValueC] [v-arg2 : ValueC]) : ValueC 
+  (NumV (+ (NumV-n v-arg1) (NumV-n v-arg2))))
+(define (interp-string-addition [v-arg1 : ValueC] [v-arg2 : ValueC]) : ValueC 
+  (StrV (string-append (StrV-s v-arg1) (StrV-s v-arg2))))
+(define (interp-subtraction [v-arg1 : ValueC] [v-arg2 : ValueC]) : ValueC 
+  (NumV (- (NumV-n v-arg1) (NumV-n v-arg2))))
+
+(define (interp-equals v-arg1 v-arg2 s-arg2) : Result
+  (cond 
+    [(equal? v-arg1 v-arg2) (v*s (TrueV) s-arg2)]
+    [else (v*s (FalseV) s-arg2)]))
+(define (interp-compare v-arg1 v-arg2 s-arg2 op) : Result
+  (cond 
+    [(op (NumV-n v-arg1) (NumV-n v-arg2)) (v*s (TrueV) s-arg2)]
+    [else (v*s (FalseV) s-arg2)]))
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+
 (define (interp-full [exprC : ExprC] [env : Env] [store : Store]) : Result
   (type-case ExprC exprC
 ;; TODO: implement all remaining cases of ExprC; you will certainly
@@ -118,13 +138,12 @@
                                        (cond
                                          ;;TODO: Not sure if this is working at this point... the boolean returns definately is not
                                          ;;it is weird because ValueC has TrueV and FalseV, instead of general Bool.
-                                         [(symbol=? op 'string+) (v*s (StrV (string-append (StrV-s v-arg1) (StrV-s v-arg2))) s-arg2)]
-                                         [(symbol=? op 'num+) (v*s (NumV (+ (NumV-n v-arg1) (NumV-n v-arg2))) s-arg2)]
-                                         [(symbol=? op 'num-) (v*s (NumV (- (NumV-n v-arg1) (NumV-n v-arg2))) s-arg2)]
-                                         ;[(symbol=? op '==) (v*s (NumV (equal? (NumV-n v-arg1) (NumV-n v-arg2))) s-arg2)]
-                                         ;[(symbol=? op '<) (v*s (NumV (< (NumV-n v-arg1) (NumV-n v-arg2))) s-arg2)]
-                                         ;[(symbol=? op '>) (v*s (NumV (> (NumV-n v-arg1) (NumV-n v-arg2))) s-arg2)])
-                                         )])])]
+                                         [(symbol=? op 'string+) (v*s (interp-string-addition v-arg1 v-arg2) s-arg2)]
+                                         [(symbol=? op 'num+) (v*s (interp-addition v-arg1 v-arg2) s-arg2)]
+                                         [(symbol=? op 'num-) (v*s (interp-subtraction v-arg1 v-arg2) s-arg2)]
+                                         [(symbol=? op '==) (interp-equals v-arg1 v-arg2 s-arg2)]
+                                         [(symbol=? op '<) (interp-compare v-arg1 v-arg2 s-arg2 <)]
+                                         [(symbol=? op '>) (interp-compare v-arg1 v-arg2 s-arg2 >)])])])]
     [Prim1C (op arg) (type-case Result (interp-full arg env store)
                        [v*s (v-arg s-arg)
                             (cond

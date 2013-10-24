@@ -118,13 +118,32 @@
                                        (cond
                                          ;;TODO: Not sure if this is working at this point... the boolean returns definately is not
                                          ;;it is weird because ValueC has TrueV and FalseV, instead of general Bool.
-                                         [(symbol=? op 'string+) (v*s (NumV (+ (NumV-n v-arg1) (NumV-n v-arg2))) s-arg2)]
+                                         [(symbol=? op 'string+) (v*s (StrV (string-append (StrV-s v-arg1) (StrV-s v-arg2))) s-arg2)]
                                          [(symbol=? op 'num+) (v*s (NumV (+ (NumV-n v-arg1) (NumV-n v-arg2))) s-arg2)]
                                          [(symbol=? op 'num-) (v*s (NumV (- (NumV-n v-arg1) (NumV-n v-arg2))) s-arg2)]
                                          ;[(symbol=? op '==) (v*s (NumV (equal? (NumV-n v-arg1) (NumV-n v-arg2))) s-arg2)]
                                          ;[(symbol=? op '<) (v*s (NumV (< (NumV-n v-arg1) (NumV-n v-arg2))) s-arg2)]
                                          ;[(symbol=? op '>) (v*s (NumV (> (NumV-n v-arg1) (NumV-n v-arg2))) s-arg2)])
                                          )])])]
+    [Prim1C (op arg) (type-case Result (interp-full arg env store)
+                       [v*s (v-arg s-arg)
+                            (cond
+                              [(symbol=? op 'print) (interp-error "haven't covered print yet")]
+                              [(symbol=? op 'tagof) (v*s (StrV (translate-to-type v-arg)) s-arg)]
+                              [else (interp-error "error")])])]
+    [LetC (s bind body) (type-case Result (interp-full bind env store)
+                           [v*s (v-b s-b)
+                               (let ([where (fresh-loc s-b)])
+                                 (interp-full
+                                  body
+                                  (extend-env s where env)
+                                  (update-store where v-b s-b)))])]
+    [IfC (co th el) (type-case Result (interp-full co env store)
+                            [v*s (v-cond s-cond)
+                                 (type-case ValueC v-cond
+                                   [TrueV () (interp-full th env s-cond)]
+                                   [FalseV () (interp-full el env s-cond)]
+                                   [else (interp-error "Did not produce true or false!!")])])]
     [else (interp-error (string-append "Haven't covered a case yet:"
                                        (to-string exprC)))]))
 
@@ -132,3 +151,11 @@
   (type-case Result (interp-full exprC empty empty)
     [v*s (value store) value]))
 
+(define (translate-to-type arg)
+  (type-case ValueC arg
+    [ObjectV (fs) "object"]
+    [ClosureV (a b e) "function"]
+    [NumV (n) "number"]
+    [StrV (s) "string"]
+    [TrueV () "boolean"]
+    [FalseV () "boolean"]))

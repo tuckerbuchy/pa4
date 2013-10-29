@@ -115,6 +115,24 @@
   (cond 
     [(op (NumV-n v-arg1) (NumV-n v-arg2)) (v*s (TrueV) s-arg2)]
     [else (v*s (FalseV) s-arg2)]))
+
+
+(define (interp-listof-fields [fields : (listof FieldC)] [env : Env] [store : Store] [acc : (listof FieldV)]): Result
+  (cond 
+    [(empty? fields) (v*s (ObjectV acc) store)]
+    [else (type-case Result (interp-full (fieldC-value (first fields)) env store)
+            [v*s (v-f s-f)
+            (interp-listof-fields (rest fields) env s-f (cons (fieldV (fieldC-name (first fields)) v-f) acc))])]))
+(define (interp-getfield [fields : (listof FieldC)] [s : string] [env : Env] [store : Store]) : Result
+  (cond 
+    [(string=? (fieldC-name (first fields)) s) (interp-full (fieldC-value (first fields)) env store)]
+    [else (interp-getfield (rest fields) s env store)]))
+(define (interp-setfield [fields : (listof FieldC)] [s : string] [value : ExprC] [env : Env] [store : Store] [acc : (listof FieldC)]) : Result
+  (cond 
+    [(empty? fields) (interp-full (ObjectC (cons (fieldC s value) acc)) env store)]
+    [(string=? (fieldC-name (first fields)) s) (interp-setfield (rest fields) s value env store acc)]
+    [else (interp-setfield (rest fields) s value env store (cons (first fields) acc))]))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 
@@ -163,8 +181,36 @@
                                    [TrueV () (interp-full th env s-cond)]
                                    [FalseV () (interp-full el env s-cond)]
                                    [else (interp-error "Did not produce true or false!!")])])]
+    [ObjectC (fields)
+             (interp-listof-fields fields env store empty)]
+    [GetFieldC (obj field) (type-case ExprC obj
+                             [ObjectC (fields) (type-case ExprC field
+                                        [StrC (s) (interp-getfield fields s env store)]
+                                        [else (interp-error "Bad field string parameter for object get field.")])]
+                             [else (interp-error "Bad object parameter for object get field.")])]
+    [SetFieldC (obj field value) (type-case ExprC obj
+                             [ObjectC (fields) (type-case ExprC field
+                                        [StrC (s) (interp-setfield fields s value env store empty)]
+                                        [else (interp-error "Bad field string parameter for object set field.")])]
+                             [else (interp-error "Bad object parameter for object set field.")])]
+    [Set!C (id value) 
+           (let ([where (fresh-loc store)])
+             (type-case Result (interp-full value env store)
+                        [v*s (v s)
+                             (begin 
+                               (extend-env id where env)
+                               (v*s v (update-store where v s)))]))]
+    ;;[FuncC (args : (listof symbol)) (body : ExprC)]
+    ;;[AppC (func : ExprC) (args : (listof ExprC))]
+    
+    
     [else (interp-error (string-append "Haven't covered a case yet:"
                                        (to-string exprC)))]))
+
+
+
+
+
 
 (define (interp [exprC : ExprC]) : ValueC
   (type-case Result (interp-full exprC empty empty)

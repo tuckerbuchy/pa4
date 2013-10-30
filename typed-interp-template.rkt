@@ -123,10 +123,12 @@
     [else (type-case Result (interp-full (fieldC-value (first fields)) env store)
             [v*s (v-f s-f)
             (interp-listof-fields (rest fields) env s-f (cons (fieldV (fieldC-name (first fields)) v-f) acc))])]))
-(define (interp-getfield [fields : (listof FieldC)] [s : string] [env : Env] [store : Store]) : Result
+
+(define (interp-getfield [fields : (listof FieldV)] [s : string] [store : Store]) : Result
   (cond 
-    [(string=? (fieldC-name (first fields)) s) (interp-full (fieldC-value (first fields)) env store)]
-    [else (interp-getfield (rest fields) s env store)]))
+    [(string=? (fieldV-name (first fields)) s) (v*s (fieldV-value (first fields)) store)]
+    [else (interp-getfield (rest fields) s store)]))
+
 (define (interp-setfield [fields : (listof FieldC)] [s : string] [value : ExprC] [env : Env] [store : Store] [acc : (listof FieldC)]) : Result
   (cond 
     [(empty? fields) (interp-full (ObjectC (cons (fieldC s value) acc)) env store)]
@@ -183,11 +185,34 @@
                                    [else (interp-error "Did not produce true or false!!")])])]
     [ObjectC (fields)
              (interp-listof-fields fields env store empty)]
-    [GetFieldC (obj field) (type-case ExprC obj
-                             [ObjectC (fields) (type-case ExprC field
-                                        [StrC (s) (interp-getfield fields s env store)]
-                                        [else (interp-error "Bad field string parameter for object get field.")])]
+;    [GetFieldC (obj field) (type-case ExprC obj
+;                             [ObjectC (fields) (type-case ExprC field
+;                                        [StrC (s) (interp-getfield fields s env store)]
+;                                        [else (interp-error "Bad field string parameter for object get field.")])]
+;                             [
+;                             [else (interp-error "Bad object parameter for object get field.")])]
+    [GetFieldC (obj field) (type-case ValueC (interp obj) 
+                             [ObjectV (fields) 
+                                      (type-case ValueC (interp field)
+                                        [StrV (s) (interp-getfield fields s store)]
+                                         [else (interp-error "Bad field string parameter for object get field.")])]
                              [else (interp-error "Bad object parameter for object get field.")])]
+;                                       
+;(GetFieldC (LetC 'prim-obj4746 (Prim1C 'print (ObjectC (list (fieldC "x" (StrC "foo"))))) 
+;                 (LetC 'prim-fld4747 (StrC "x") 
+;                       (LetC 'prim-fldval4748 
+;                             (GetFieldC (IdC 'prim-obj4746) (IdC 'prim-fld4747)) 
+;                             (LetC 'prim-newval4749 (StrC "bar") 
+;                                   (SetFieldC (IdC 'prim-obj4746) (IdC 'prim-fld4747) 
+;                                              (IfC (IfC (Prim2C '== (Prim1C 'tagof (IdC 'prim-newval4749)) (StrC "number")) 
+;                                                        (IfC (Prim2C '== (Prim1C 'tagof (IdC 'prim-fldval4748)) (StrC "number")) (TrueC) (FalseC)) (FalseC)) 
+;                                                                                           (Prim2C 'num+ (IdC 'prim-fldval4748) (IdC 'prim-newval4749)) 
+;                                                                                           (IfC (IfC (Prim2C '== (Prim1C 'tagof (IdC 'prim-newval4749)) (StrC "string")) 
+;                                                                                                     (IfC (Prim2C '== (Prim1C 'tagof (IdC 'prim-fldval4748)) (StrC "string")) (TrueC) (FalseC)) (FalseC)) 
+;                                                                                                (Prim2C 'string+ (IdC 'prim-fldval4748) (IdC 'prim-newval4749)) (ErrorC (StrC "Bad arguments to +"))))))))) (StrC "x"))
+;
+;    
+;    
     [SetFieldC (obj field value) (type-case ExprC obj
                              [ObjectC (fields) (type-case ExprC field
                                         [StrC (s) (interp-setfield fields s value env store empty)]

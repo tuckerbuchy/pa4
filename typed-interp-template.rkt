@@ -191,29 +191,43 @@
 ;                                        [else (interp-error "Bad field string parameter for object get field.")])]
 ;                             [
 ;                             [else (interp-error "Bad object parameter for object get field.")])]
-    [GetFieldC (objid fieldid) (type-case ValueC (interp objid) 
-                             [ObjectV (fields) 
-                                      (type-case ValueC (interp fieldid)
-                                        [StrV (s) (interp-getfield fields s store)]
-                                         [else (interp-error "Bad field string parameter for object get field.")])]
-                             [else (interp-error "Bad object parameter for object get field.")])]
+    [GetFieldC (objid fieldid) 
+               (type-case Result (interp-full objid env store) 
+                 [v*s (v-obj s-obj)
+                      (type-case ValueC v-obj
+                        [ObjectV (fields)
+                              (type-case ValueC (interp fieldid) 
+                                [StrV (s) (interp-getfield fields s store)]
+                                [else (interp-error "Bad field string parameter for object get field.")])]
+                        [else (interp-error "Bad object parameter for object get field.")])])]
     
-    [SetFieldC (objid fieldid value) (let ([id (IdC-id objid)])
-                                       (type-case ValueC
-                                      
-                                      
-               (type-case ValueC (interp objid)
-                             [ObjectV (fields) 
-                                      (type-case ValueC (interp fieldid)
-                                        [StrV (s) (interp-setfield fields s (interp value) env store empty)]
-                                              (type-case Result (interp-setfield fields s (interp value) env store empty)
-                                                [v*s (val st) (let ([where (fresh-loc st)])
-                                                                (begin 
-                                                                  (extend-env (IdC-id objid) where env)
-                                                                  (v*s val (update-store where val st)
-                                                                  )))])]
-                                        [else (interp-error "Bad field string parameter for object set field.")])]
-                             [else (interp-error "Bad object parameter for object set field.")])]
+    [SetFieldC (objid fieldid value)
+               (type-case Result (interp-full objid env store)
+                 [v*s (v-obj s-obj) 
+                      (type-case ValueC v-obj
+                        [ObjectV (fields) 
+                                 (type-case ValueC (interp fieldid)
+                                   [StrV (s) 
+                                         (type-case Result (interp-full value env store)
+                                           [v*s (v-val s-val)
+                                                (interp-setfield fields s v-val env s-val empty)])]
+                                   [else (interp-error "Bad field string parameter for object set field.")])]
+                        [else (interp-error "Bad object parameter for object set field.")])])]
+                                           
+                                     
+                                     
+;               (type-case ValueC (interp-full objid env store)
+;                             [ObjectV (fields) 
+;                                      (type-case ValueC (interp fieldid)
+;                                        [StrV (s) (interp-setfield fields s (interp value) env store empty)]
+;                                              (type-case Result (interp-setfield fields s (interp value) env store empty)
+;                                                [v*s (val st) (let ([where (fresh-loc st)])
+;                                                                (begin 
+;                                                                  (extend-env (IdC-id objid) where env)
+;                                                                  (v*s val (update-store where val st)
+;                                                                  )))]))]
+;                                        [else (interp-error "Bad field string parameter for object set field.")]
+;                             [else (interp-error "Bad object parameter for object set field.")]
     [Set!C (id value) 
            (let ([where (fresh-loc store)])
              (type-case Result (interp-full value env store)

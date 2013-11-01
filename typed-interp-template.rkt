@@ -167,7 +167,7 @@
     [Prim1C (op arg) (type-case Result (interp-full arg env store)
                        [v*s (v-arg s-arg)
                             (cond
-                              [(symbol=? op 'print) (interp-error "haven't covered print yet")]
+                              [(symbol=? op 'print) (begin (display (pretty-value v-arg)) (v*s v-arg s-arg))]
                               [(symbol=? op 'tagof) (v*s (StrV (translate-to-type v-arg)) s-arg)]
                               [else (interp-error "error")])])]
     [LetC (s bind body) (type-case Result (interp-full bind env store)

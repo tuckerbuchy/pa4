@@ -127,25 +127,27 @@
             [v*s (v-f s-f)
             (interp-listof-fields (rest fields) env s-f (cons (fieldV (fieldC-name (first fields)) v-f) acc))])]))
 
-;(fieldV-name (first fields))
-
 (define (interp-getfield [fields : (listof FieldV)] [s : string] [store : Store]) : Result
   (cond
     [(empty? fields) (interp-error (string-append "Field not found:" s))]
     [(string=? (fieldV-name (first fields)) s) (v*s (fieldV-value (first fields)) store)]
     [else (interp-getfield (rest fields) s store)]))
 
-(define (interp-setfield [fields : (listof FieldV)] [s : string] [value : ValueC] [acc : (listof FieldV)]) : ValueC
-  (cond 
-    [(empty? fields) (ObjectV (cons (fieldV s value) acc))]
-    [(string=? (fieldV-name (first fields)) s) (interp-setfield (rest fields) s value acc)]
-    [else (interp-setfield (rest fields) s value (cons (first fields) acc))]))
+(define (interp-setfield [obj : ValueC] [fields : (listof FieldV)] [fieldId : symbol] [newVal : ValueC] [store : Store] [env : Env]) : Result
+  (let ([fieldIdStr (symbol->string fieldId)])
+    (cond 
+      [(empty? fields) (let ([where (fresh-loc store)]) 
+                         (begin 
+                           (extend-env fieldId where env)
+                           (v*s (ObjectV (cons (fieldV fieldIdStr newVal) (ObjectV-fields obj))) (update-store where newVal store))))]
+      [(string=? (fieldV-name (first fields)) fieldIdStr) (v*s obj (update-store (env-lookup fieldId env) newVal store))]
+      [else (interp-setfield obj (rest fields) fieldId newVal store env)])))
+  
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 
 (define (interp-full [exprC : ExprC] [env : Env] [store : Store]) : Result 
-  (begin (display (to-string exprC))
   (type-case ExprC exprC
 ;; TODO: implement all remaining cases of ExprC; you will certainly
 ;;       want helper functions (like the Lookup metafunction
@@ -190,8 +192,7 @@
                                    [TrueV () (interp-full th env s-cond)]
                                    [FalseV () (interp-full el env s-cond)]
                                    [else (interp-error "Did not produce true or false!!")])])]
-    [ObjectC (fields)
-             (interp-listof-fields fields env store empty)]
+    [ObjectC (fields) (interp-listof-fields fields env store empty)]
     [GetFieldC (objid fieldid)
                (type-case Result (interp-full objid env store) 
                  [v*s (v-obj s-obj)
@@ -203,22 +204,36 @@
                                        [StrV (s) (interp-getfield fields s s-field)]
                                        [else (interp-error "Bad field string parameter for object get field.")])])]
                         [else (interp-error "Bad object parameter for object get field.")])])]
-    
-    [SetFieldC (objid fieldid value)
+;    [SetFieldC (objid fieldid value)
+;               (begin (cond 
+;                 [ ;; if the field doesnt exist, createa new location
+;                  ]
+;                 [ 
+;                  ;; if the field does exist, update it
+;                  ])
+;                      ;;return updated object
+;                      )
+    [SetFieldC (objid fieldid newVal)
                (type-case Result (interp-full objid env store)
-                 [v*s (v-obj s-obj) 
-                      (type-case ValueC v-obj
-                        [ObjectV (fields) 
-                                 (type-case Result (interp-full fieldid env s-obj)
-                                   [v*s (v-field s-field)
-                                        (type-case ValueC v-field
-                                          [StrV (s) 
-                                                (type-case Result (interp-full value env s-field)
-                                                  [v*s (v-val s-val)
-                                                       (let ([newobj (interp-setfield fields s v-val empty)])
-                                                             (v*s newobj s-val))])]
-                                          [else (interp-error "Bad field string parameter for object set field.")])])]
-                        [else (interp-error "Bad object parameter for object set field.")])])]
+                 [v*s (v-obj s-obj)
+                      (type-case Result (interp-full newVal env store)
+                        [v*s (v-newVal s-newVal) 
+                             (interp-setfield v-obj (ObjectV-fields v-obj) (IdC-id fieldid) v-newVal s-newVal env)])])]
+;    [SetFieldC (objid fieldid value)
+;               (type-case Result (interp-full objid env store)
+;                 [v*s (v-obj s-obj) 
+;                      (type-case ValueC v-obj
+;                        [ObjectV (fields) 
+;                                 (type-case Result (interp-full fieldid env s-obj)
+;                                   [v*s (v-field s-field)
+;                                        (type-case ValueC v-field
+;                                          [StrV (s) 
+;                                                (type-case Result (interp-full value env s-field)
+;                                                  [v*s (v-val s-val)
+;                                                       (let ([newobj (interp-setfield fields s v-val empty)])
+;                                                             (v*s newobj s-val))])]
+;                                          [else (interp-error "Bad field string parameter for object set field.")])])]
+;                        [else (interp-error "Bad object parameter for object set field.")])])]
     [Set!C (id value)
            (let ([where (fresh-loc store)])
              (type-case Result (interp-full value env store)
@@ -231,7 +246,7 @@
     
     
     [else (interp-error (string-append "Haven't covered a case yet:"
-                                       (to-string exprC)))])))
+                                       (to-string exprC)))]))
 
 
 

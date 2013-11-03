@@ -192,27 +192,17 @@
                                    [TrueV () (interp-full th env s-cond)]
                                    [FalseV () (interp-full el env s-cond)]
                                    [else (interp-error "Did not produce true or false!!")])])]
-<<<<<<< HEAD
     [ObjectC (fields) (interp-listof-fields fields env store empty)]
     [GetFieldC (objid fieldid)
-=======
-    [ObjectC (fields)
-             (interp-listof-fields fields env store empty)]
-;    [GetFieldC (obj field) (type-case ExprC obj
-;                             [ObjectC (fields) (type-case ExprC field
-;                                        [StrC (s) (interp-getfield fields s env store)]
-;                                        [else (interp-error "Bad field string parameter for object get field.")])]
-;                             [
-;                             [else (interp-error "Bad object parameter for object get field.")])]
-    [GetFieldC (objid fieldid) 
->>>>>>> parent of 10cd0c9... 180
                (type-case Result (interp-full objid env store) 
                  [v*s (v-obj s-obj)
                       (type-case ValueC v-obj
                         [ObjectV (fields)
-                              (type-case ValueC (interp fieldid) 
-                                [StrV (s) (interp-getfield fields s store)]
-                                [else (interp-error "Bad field string parameter for object get field.")])]
+                              (type-case Result (interp-full fieldid env s-obj)
+                                [v*s (v-field s-field) 
+                                     (type-case ValueC v-field
+                                       [StrV (s) (interp-getfield fields s s-field)]
+                                       [else (interp-error "Bad field string parameter for object get field.")])])]
                         [else (interp-error "Bad object parameter for object get field.")])])]
 ;    [SetFieldC (objid fieldid value)
 ;               (begin (cond 
@@ -225,7 +215,6 @@
 ;                      )
     [SetFieldC (objid fieldid newVal)
                (type-case Result (interp-full objid env store)
-<<<<<<< HEAD
                  [v*s (v-obj s-obj)
                       (type-case Result (interp-full newVal env store)
                         [v*s (v-newVal s-newVal) 
@@ -246,34 +235,6 @@
 ;                                          [else (interp-error "Bad field string parameter for object set field.")])])]
 ;                        [else (interp-error "Bad object parameter for object set field.")])])]
     [Set!C (id value)
-=======
-                 [v*s (v-obj s-obj) 
-                      (type-case ValueC v-obj
-                        [ObjectV (fields) 
-                                 (type-case ValueC (interp fieldid)
-                                   [StrV (s) 
-                                         (type-case Result (interp-full value env store)
-                                           [v*s (v-val s-val)
-                                                (interp-setfield fields s v-val env s-val empty)])]
-                                   [else (interp-error "Bad field string parameter for object set field.")])]
-                        [else (interp-error "Bad object parameter for object set field.")])])]
-                                           
-                                     
-                                     
-;               (type-case ValueC (interp-full objid env store)
-;                             [ObjectV (fields) 
-;                                      (type-case ValueC (interp fieldid)
-;                                        [StrV (s) (interp-setfield fields s (interp value) env store empty)]
-;                                              (type-case Result (interp-setfield fields s (interp value) env store empty)
-;                                                [v*s (val st) (let ([where (fresh-loc st)])
-;                                                                (begin 
-;                                                                  (extend-env (IdC-id objid) where env)
-;                                                                  (v*s val (update-store where val st)
-;                                                                  )))]))]
-;                                        [else (interp-error "Bad field string parameter for object set field.")]
-;                             [else (interp-error "Bad object parameter for object set field.")]
-    [Set!C (id value) 
->>>>>>> parent of 10cd0c9... 180
            (let ([where (fresh-loc store)])
              (type-case Result (interp-full value env store)
                         [v*s (v s)

@@ -112,28 +112,44 @@
     [(equal? v-arg1 v-arg2) (v*s (TrueV) s-arg2)]
     [else (v*s (FalseV) s-arg2)]))
 (define (interp-compare v-arg1 v-arg2 s-arg2 op) : Result
-  (cond 
-    [(op (NumV-n v-arg1) (NumV-n v-arg2)) (v*s (TrueV) s-arg2)]
-    [else (v*s (FalseV) s-arg2)]))
+     (cond
+       [(op (NumV-n v-arg1) (NumV-n v-arg2)) (v*s (TrueV) s-arg2)]
+       [else (v*s (FalseV) s-arg2)]))
 
+(define (fields_to_stringlist [fields : (listof FieldC)] [acc : (listof string)]) : (listof string)
+  (cond
+    [(empty? fields) acc]
+    [else (fields_to_stringlist (rest fields) (cons (fieldC-name (first fields)) acc))]))
+
+(define (check-duplicates [fieldnames : (listof string)]) : ValueC
+  (cond
+    [(empty? fieldnames) (FalseV)]
+    [(member (first fieldnames) (rest fieldnames)) (TrueV)]
+    [else (check-duplicates (rest fieldnames))]))
 
 (define (interp-listof-fields [fields : (listof FieldC)] [env : Env] [store : Store] [acc : (listof FieldV)]): Result
   (cond 
     [(empty? fields) (v*s (ObjectV acc) store)]
     [else (type-case Result (interp-full (fieldC-value (first fields)) env store)
-            [v*s (v-f s-f)
-            (interp-listof-fields (rest fields) env s-f (cons (fieldV (fieldC-name (first fields)) v-f) acc))])]))
+            [v*s (v-f s-f) (interp-listof-fields (rest fields) env s-f (cons (fieldV (fieldC-name (first fields)) v-f) acc))])]))
 
 (define (interp-getfield [fields : (listof FieldV)] [s : string] [store : Store]) : Result
-  (cond
-	 [(empty? fields) (interp-error "FIELD NOT FOUND")] 
+  (cond 
+    [(empty? fields) (interp-error (string-append "Field not found: " s))]
     [(string=? (fieldV-name (first fields)) s) (v*s (fieldV-value (first fields)) store)]
     [else (interp-getfield (rest fields) s store)]))
 
-(define (interp-setfield [fields : (listof FieldV)] [s : string] [value : ValueC] [env : Env] [store : Store] [acc : (listof FieldV)]) : Result
+;(define (interp-setfield [fields : (listof FieldV)] [id : symbol] [s : string] [value : ValueC] [env : Env] [store : Store] [acc : (listof FieldV)]) : Result
+(define (interp-setfield [fields : (listof FieldV)] [s : string] [value : ValueC] [env : Env] [store : Store] [acc : (listof FieldV)]) : Result  
   (cond 
+    ; In the case that the field does not exist.
     [(empty? fields) (v*s (ObjectV (cons (fieldV s value) acc)) store)]
-    [(string=? (fieldV-name (first fields)) s) (interp-setfield (rest fields) s value env store acc)]
+    ;[(empty? fields) (v*s (ObjectV (cons (fieldV s value) acc)) (let ([where (fresh-loc store)])(begin (extend-env id where env) (update-store where value store))))]
+    ; If we find the field
+    ;[(string=? (fieldV-name (first fields)) s) (v*s (ObjectV (append (rest fields) (cons (fieldV s value) acc))) (update-store (env-lookup id env) value store))]
+    ;[(string=? (fieldV-name (first fields)) s) (interp-setfield (rest fields) s value env store acc)]
+    [(string=? (fieldV-name (first fields)) s) (v*s (ObjectV (append (rest fields) (cons (fieldV s value) acc))) store)]
+    ;[else (interp-setfield (rest fields) id s value env store (cons (first fields) acc))]))
     [else (interp-setfield (rest fields) s value env store (cons (first fields) acc))]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -157,14 +173,34 @@
                                   (type-case Result (interp-full arg2 env s-arg1)
                                     [v*s (v-arg2 s-arg2) 
                                        (cond
-                                         ;;TODO: Not sure if this is working at this point... the boolean returns definately is not
-                                         ;;it is weird because ValueC has TrueV and FalseV, instead of general Bool.
-                                         [(symbol=? op 'string+) (v*s (interp-string-addition v-arg1 v-arg2) s-arg2)]
-                                         [(symbol=? op 'num+) (v*s (interp-addition v-arg1 v-arg2) s-arg2)]
-                                         [(symbol=? op 'num-) (v*s (interp-subtraction v-arg1 v-arg2) s-arg2)]
+                                         [(symbol=? op 'string+)
+                                          (cond
+                                            [(and (string=? (translate-to-type v-arg1) (translate-to-type v-arg2)) (string=? (translate-to-type v-arg1) "string")) 
+                                             (v*s (interp-string-addition v-arg1 v-arg2) s-arg2)]
+                                            [else (interp-error (string-append "Bad arguments for " (string-append (symbol->string op) (string-append":\n" (string-append (pretty-value v-arg1) (string-append "\n" (pretty-value v-arg2)))))))])]
+                                         [(symbol=? op 'num+) 
+                                          (cond
+                                            [(and (string=? (translate-to-type v-arg1) (translate-to-type v-arg2)) (string=? (translate-to-type v-arg1) "number")) 
+                                             (v*s (interp-addition v-arg1 v-arg2) s-arg2)]
+                                            [else (interp-error (string-append "Bad arguments for " (string-append (symbol->string op) (string-append":\n" (string-append (pretty-value v-arg1) (string-append "\n" (pretty-value v-arg2)))))))])]                                         
+                                         [(symbol=? op 'num-) 
+                                          (cond
+                                            [(and (string=? (translate-to-type v-arg1) (translate-to-type v-arg2)) (string=? (translate-to-type v-arg1) "number")) 
+                                             (v*s (interp-subtraction v-arg1 v-arg2) s-arg2)]
+                                            [else (interp-error (string-append "Bad arguments for " (string-append (symbol->string op) (string-append":\n" (string-append (pretty-value v-arg1) (string-append "\n" (pretty-value v-arg2)))))))])]
+
                                          [(symbol=? op '==) (interp-equals v-arg1 v-arg2 s-arg2)]
-                                         [(symbol=? op '<) (interp-compare v-arg1 v-arg2 s-arg2 <)]
-                                         [(symbol=? op '>) (interp-compare v-arg1 v-arg2 s-arg2 >)])])])]
+                                         
+                                         [(symbol=? op '<) 
+                                          (cond
+                                            [(and (string=? (translate-to-type v-arg1) (translate-to-type v-arg2)) (string=? (translate-to-type v-arg1) "number")) 
+                                             (interp-compare v-arg1 v-arg2 s-arg2 <)]
+                                            [else (interp-error (string-append "Bad arguments for " (string-append (symbol->string op) (string-append":\n" (string-append (pretty-value v-arg1) (string-append "\n" (pretty-value v-arg2)))))))])]
+                                         [(symbol=? op '>) (cond
+                                            [(and (string=? (translate-to-type v-arg1) (translate-to-type v-arg2)) (string=? (translate-to-type v-arg1) "number")) 
+                                             (interp-compare v-arg1 v-arg2 s-arg2 >)]
+                                            [else (interp-error (string-append "Bad arguments for " (string-append (symbol->string op) (string-append":\n" (string-append (pretty-value v-arg1) (string-append "\n" (pretty-value v-arg2)))))))])]
+                                         )])])]
     [Prim1C (op arg) (type-case Result (interp-full arg env store)
                        [v*s (v-arg s-arg)
                             (cond
@@ -181,11 +217,12 @@
     [IfC (co th el) (type-case Result (interp-full co env store)
                             [v*s (v-cond s-cond)
                                  (type-case ValueC v-cond
-                                   [TrueV () (interp-full th env s-cond)]
                                    [FalseV () (interp-full el env s-cond)]
-                                   [else (interp-error "Did not produce true or false!!")])])]
-    [ObjectC (fields)
-             (interp-listof-fields fields env store empty)]
+                                   [else (interp-full th env s-cond)])])]
+    [ObjectC (fields) (type-case ValueC (check-duplicates (fields_to_stringlist fields empty))
+                        [TrueV () (interp-error "Multiply-defined fields")]
+                        [else (interp-listof-fields fields env store empty)])]
+    
     [GetFieldC (objid fieldid) 
                (type-case Result (interp-full objid env store) 
                  [v*s (v-obj s-obj)
@@ -195,33 +232,42 @@
                                 [v*s (v-field s-field) 
                                      (type-case ValueC v-field
                                        [StrV (s) (interp-getfield fields s s-field)]
-                                       [else (interp-error "Bad field string parameter for object get field.")])])]
-                        [else (interp-error "Bad object parameter for object get field.")])])]
+                                       [else (interp-error (string-append "Non-string in field lookup: " (pretty-value v-field)))])])]
+                        [else (interp-error (string-append "Non-object in field lookup: " (pretty-value v-obj)))])])]
     
     [SetFieldC (objid fieldid value)
                (type-case Result (interp-full objid env store)
                  [v*s (v-obj s-obj) 
                       (type-case ValueC v-obj
                         [ObjectV (fields) 
-                                 (type-case Result (interp-full fieldid env s-obj)
-                                   [v*s (v-field s-field)
-                                        (type-case ValueC v-field
+                                 (type-case Result (interp-full fieldid env store)
+                                   [v*s (v-f s-f)
+                                        (type-case ValueC v-f
                                           [StrV (s) 
-                                                (type-case Result (interp-full value env s-field)
+                                                (type-case Result (interp-full value env s-f)
                                                   [v*s (v-val s-val)
-                                                       (interp-setfield fields s v-val env s-val empty)])]
-                                          [else (interp-error "Bad field string parameter for object set field.")])])]
-                        [else (interp-error "Bad object parameter for object set field.")])])]
-    [Set!C (id value) 
-           (let ([where (fresh-loc store)])
-             (type-case Result (interp-full value env store)
-                        [v*s (v s)
-                             (begin 
-                               (extend-env id where env)
-                               (v*s v (update-store where v s)))]))]
-    ;;[FuncC (args : (listof symbol)) (body : ExprC)]
-    ;;[AppC (func : ExprC) (args : (listof ExprC))]
+                                                       (interp-setfield fields s v-val env store empty)])] 
+                                          [else (interp-error (string-append "Non-string in field update: " (pretty-value v-f)))])])]
+                        [else (interp-error (string-append "Non-object in field update: " (pretty-value v-obj)))])])]
     
+    [Set!C (id value) 
+           ; Evaluate the results.
+           (type-case Result (interp-full value env store)
+             ; Use the newly evaluated value and store.
+             [v*s (v s)
+                  ; Update the store with the new value using the old enviornment location.
+                  (v*s v (update-store (env-lookup id env) v s))])]
+
+    
+    ;[FuncC (args : (listof symbol)) (body : ExprC)()]
+    [FuncC (args body) (v*s (ClosureV args body env) store)]
+
+    
+    ;;[AppC (func : ExprC) (args : (listof ExprC))]
+    ;[AppC (func args) ()]
+    
+    [ErrorC (expr) (type-case Result (interp-full expr env store)
+                     [v*s (v s) (interp-error (pretty-value v))])]
     
     [else (interp-error (string-append "Haven't covered a case yet:"
                                        (to-string exprC)))]))

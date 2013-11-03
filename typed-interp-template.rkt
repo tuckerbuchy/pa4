@@ -125,7 +125,8 @@
             (interp-listof-fields (rest fields) env s-f (cons (fieldV (fieldC-name (first fields)) v-f) acc))])]))
 
 (define (interp-getfield [fields : (listof FieldV)] [s : string] [store : Store]) : Result
-  (cond 
+  (cond
+	 [(empty? fields) (interp-error "FIELD NOT FOUND")] 
     [(string=? (fieldV-name (first fields)) s) (v*s (fieldV-value (first fields)) store)]
     [else (interp-getfield (rest fields) s store)]))
 

@@ -100,17 +100,20 @@
 
 
 ;;;;;;;;;;;;;;;;;;HELPERS;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define (interp-addition [v-arg1 : ValueC] [v-arg2 : ValueC]) : ValueC 
-  (NumV (+ (NumV-n v-arg1) (NumV-n v-arg2))))
-(define (interp-string-addition [v-arg1 : ValueC] [v-arg2 : ValueC]) : ValueC 
-  (StrV (string-append (StrV-s v-arg1) (StrV-s v-arg2))))
-(define (interp-subtraction [v-arg1 : ValueC] [v-arg2 : ValueC]) : ValueC 
-  (NumV (- (NumV-n v-arg1) (NumV-n v-arg2))))
+(define (interp-addition [v-arg1 : ValueC] [v-arg2 : ValueC] [store : Store]) : Result 
+  (v*s (NumV (+ (NumV-n v-arg1) (NumV-n v-arg2))) store))
+
+(define (interp-string-addition [v-arg1 : ValueC] [v-arg2 : ValueC] [store : Store]) : Result
+    (v*s (StrV (string-append (StrV-s v-arg1) (StrV-s v-arg2))) store))
+
+(define (interp-subtraction [v-arg1 : ValueC] [v-arg2 : ValueC] [store : Store]) : Result 
+  (v*s (NumV (- (NumV-n v-arg1) (NumV-n v-arg2))) store))
 
 (define (interp-equals v-arg1 v-arg2 s-arg2) : Result
   (cond 
     [(equal? v-arg1 v-arg2) (v*s (TrueV) s-arg2)]
     [else (v*s (FalseV) s-arg2)]))
+
 (define (interp-compare v-arg1 v-arg2 s-arg2 op) : Result
   (cond 
     [(op (NumV-n v-arg1) (NumV-n v-arg2)) (v*s (TrueV) s-arg2)]
@@ -124,21 +127,25 @@
             [v*s (v-f s-f)
             (interp-listof-fields (rest fields) env s-f (cons (fieldV (fieldC-name (first fields)) v-f) acc))])]))
 
+;(fieldV-name (first fields))
+
 (define (interp-getfield [fields : (listof FieldV)] [s : string] [store : Store]) : Result
-  (cond 
+  (cond
+    [(empty? fields) (interp-error (string-append "Field not found:" s))]
     [(string=? (fieldV-name (first fields)) s) (v*s (fieldV-value (first fields)) store)]
     [else (interp-getfield (rest fields) s store)]))
 
-(define (interp-setfield [fields : (listof FieldV)] [s : string] [value : ValueC] [env : Env] [store : Store] [acc : (listof FieldV)]) : Result
+(define (interp-setfield [fields : (listof FieldV)] [s : string] [value : ValueC] [acc : (listof FieldV)]) : ValueC
   (cond 
-    [(empty? fields) (v*s (ObjectV (cons (fieldV s value) acc)) store)]
-    [(string=? (fieldV-name (first fields)) s) (interp-setfield (rest fields) s value env store acc)]
-    [else (interp-setfield (rest fields) s value env store (cons (first fields) acc))]))
+    [(empty? fields) (ObjectV (cons (fieldV s value) acc))]
+    [(string=? (fieldV-name (first fields)) s) (interp-setfield (rest fields) s value acc)]
+    [else (interp-setfield (rest fields) s value (cons (first fields) acc))]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 
-(define (interp-full [exprC : ExprC] [env : Env] [store : Store]) : Result
+(define (interp-full [exprC : ExprC] [env : Env] [store : Store]) : Result 
+  (begin (display (to-string exprC))
   (type-case ExprC exprC
 ;; TODO: implement all remaining cases of ExprC; you will certainly
 ;;       want helper functions (like the Lookup metafunction
@@ -158,9 +165,9 @@
                                        (cond
                                          ;;TODO: Not sure if this is working at this point... the boolean returns definately is not
                                          ;;it is weird because ValueC has TrueV and FalseV, instead of general Bool.
-                                         [(symbol=? op 'string+) (v*s (interp-string-addition v-arg1 v-arg2) s-arg2)]
-                                         [(symbol=? op 'num+) (v*s (interp-addition v-arg1 v-arg2) s-arg2)]
-                                         [(symbol=? op 'num-) (v*s (interp-subtraction v-arg1 v-arg2) s-arg2)]
+                                         [(symbol=? op 'string+) (interp-string-addition v-arg1 v-arg2 s-arg2)]
+                                         [(symbol=? op 'num+) (interp-addition v-arg1 v-arg2 s-arg2)]
+                                         [(symbol=? op 'num-) (interp-subtraction v-arg1 v-arg2 s-arg2)]
                                          [(symbol=? op '==) (interp-equals v-arg1 v-arg2 s-arg2)]
                                          [(symbol=? op '<) (interp-compare v-arg1 v-arg2 s-arg2 <)]
                                          [(symbol=? op '>) (interp-compare v-arg1 v-arg2 s-arg2 >)])])])]
@@ -185,7 +192,7 @@
                                    [else (interp-error "Did not produce true or false!!")])])]
     [ObjectC (fields)
              (interp-listof-fields fields env store empty)]
-    [GetFieldC (objid fieldid) 
+    [GetFieldC (objid fieldid)
                (type-case Result (interp-full objid env store) 
                  [v*s (v-obj s-obj)
                       (type-case ValueC v-obj
@@ -208,10 +215,11 @@
                                           [StrV (s) 
                                                 (type-case Result (interp-full value env s-field)
                                                   [v*s (v-val s-val)
-                                                       (interp-setfield fields s v-val env s-val empty)])]
+                                                       (let ([newobj (interp-setfield fields s v-val empty)])
+                                                             (v*s newobj s-val))])]
                                           [else (interp-error "Bad field string parameter for object set field.")])])]
                         [else (interp-error "Bad object parameter for object set field.")])])]
-    [Set!C (id value) 
+    [Set!C (id value)
            (let ([where (fresh-loc store)])
              (type-case Result (interp-full value env store)
                         [v*s (v s)
@@ -223,7 +231,7 @@
     
     
     [else (interp-error (string-append "Haven't covered a case yet:"
-                                       (to-string exprC)))]))
+                                       (to-string exprC)))])))
 
 
 

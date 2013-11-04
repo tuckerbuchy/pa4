@@ -98,6 +98,8 @@
 (define-type Result
   [v*s (value : ValueC) (store : Store)])
 
+(define-type ResultsList
+  [resultslist (values : (listof ValueC)) (store : Store)])
 
 ;;;;;;;;;;;;;;;;;;HELPERS;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define (interp-addition [v-arg1 : ValueC] [v-arg2 : ValueC]) : ValueC 
@@ -148,9 +150,9 @@
 (define (interp-setfield [fields : (listof FieldV)] [s : string] [value : ValueC] [env : Env] [store : Store] [acc : (listof FieldV)]) : Result  
   (cond 
     ; In the case that the field does not exist...
-    [(empty? fields) (v*s (ObjectV (cons (fieldV s value) acc)) store)]
+    [(empty? fields) (v*s (ObjectV (reverse (cons (fieldV s value) acc))) store)]
     ; If we find the field then...
-    [(string=? (fieldV-name (first fields)) s) (v*s (ObjectV (append (rest fields) (cons (fieldV s value) acc))) store)]
+    [(string=? (fieldV-name (first fields)) s) (v*s (ObjectV (append (reverse (cons (fieldV s value) acc)) (rest fields))) store)]
     ; Otherwise keep looking...
     [else (interp-setfield (rest fields) s value env store (cons (first fields) acc))]))
 
@@ -177,10 +179,11 @@
     ))
 
 ; Helper function that evaluates a list of ExprC expressions to ValueC expressions.
-(define (map-interp [exprs : (listof ExprC)] [acc : (listof ValueC)] [env : Env] [store : Store]) : (listof ValueC)
+(define (map-interp [exprs : (listof ExprC)] [acc : (listof ValueC)] [env : Env] [store : Store]) : ResultsList
   (cond
-    [(empty? exprs) acc]
-    [else (map-interp (rest exprs) (cons (v*s-value (interp-full (first exprs) env store)) acc) env store)]))
+    [(empty? exprs) (resultslist acc store)]
+    [else (type-case Result (interp-full (first exprs) env store)
+            [v*s (v s) (map-interp (rest exprs) (cons v acc) env s)])]))
 
 ; A helper function that will apply a given function definition to a given list of parameter arguments.
 (define (Apply [func : ValueC] [args : (listof ExprC)] [env : Env] [store : Store]) : Result
@@ -188,7 +191,7 @@
     ; Be sure that a function was passed in.
     [ClosureV (f-args f-body f-env) 
               ; Evaluate the parameter arguments passed in.
-              (let ([vals (map-interp args empty env store)])
+              (let ([results (map-interp args empty env store)])
                 (cond
                   ; Check that the number of arguments passed in matches the number of parameters for the function.
                   [(= (length args) (length f-args)) 
@@ -203,7 +206,7 @@
                       (extend-env-bylists f-args locns env)
                       ; update store' -> update store'
                       ; current store to store'
-                      (update-store-bylists locns vals store)))]
+                      (update-store-bylists locns (resultslist-values results) (resultslist-store results))))]
                   ; Throw an arity mismatch error if the number of arguments and parameters does not match.
                   [else (interp-error "Application failed with arity mismatch")]
                   )
@@ -266,6 +269,7 @@
                               [(symbol=? op 'print) (begin (display (pretty-value v-arg)) (v*s v-arg s-arg))]
                               [(symbol=? op 'tagof) (v*s (StrV (translate-to-type v-arg)) s-arg)]
                               [else (interp-error "error")])])]
+    ;[LetC (id : symbol) (bind : ExprC) (body : ExprC)]
     [LetC (s bind body) (type-case Result (interp-full bind env store)
                            [v*s (v-b s-b)
                                (let ([where (fresh-loc s-b)])
@@ -299,13 +303,13 @@
                  [v*s (v-obj s-obj) 
                       (type-case ValueC v-obj
                         [ObjectV (fields) 
-                                 (type-case Result (interp-full fieldid env store)
+                                 (type-case Result (interp-full fieldid env s-obj)
                                    [v*s (v-f s-f)
                                         (type-case ValueC v-f
                                           [StrV (s) 
                                                 (type-case Result (interp-full value env s-f)
                                                   [v*s (v-val s-val)
-                                                       (interp-setfield fields s v-val env store empty)])] 
+                                                       (interp-setfield fields s v-val env s-val empty)])] 
                                           [else (interp-error (string-append "Non-string in field update: " (pretty-value v-f)))])])]
                         [else (interp-error (string-append "Non-object in field update: " (pretty-value v-obj)))])])]
     
@@ -320,16 +324,15 @@
     [ErrorC (expr) (type-case Result (interp-full expr env store)
                      [v*s (v s) (interp-error (pretty-value v))])]
     
-    ;[FuncC (args : (listof symbol)) (body : ExprC)()]
+    ;;[FuncC (args : (listof symbol)) (body : ExprC)()]
     [FuncC (args body) (v*s (ClosureV args body env) store)]
 
     
     ;;[AppC (func : ExprC) (args : (listof ExprC))]
-    
     [AppC (func args) 
           ; Evaluate function to a value
           (type-case Result (interp-full func env store)
-            [v*s (v s) (Apply v args env store)])]
+            [v*s (v s) (Apply v args env s)])]
     
     ;[else (interp-error (string-append "Haven't covered a case yet:" (to-string exprC)))]
     ))

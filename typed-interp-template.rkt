@@ -111,46 +111,105 @@
   (cond 
     [(equal? v-arg1 v-arg2) (v*s (TrueV) s-arg2)]
     [else (v*s (FalseV) s-arg2)]))
+
 (define (interp-compare v-arg1 v-arg2 s-arg2 op) : Result
      (cond
        [(op (NumV-n v-arg1) (NumV-n v-arg2)) (v*s (TrueV) s-arg2)]
        [else (v*s (FalseV) s-arg2)]))
 
+; Function to convert a list of FieldC fields to a lits of the identifier strings from each FieldC.
 (define (fields_to_stringlist [fields : (listof FieldC)] [acc : (listof string)]) : (listof string)
   (cond
     [(empty? fields) acc]
     [else (fields_to_stringlist (rest fields) (cons (fieldC-name (first fields)) acc))]))
 
+; Function to check if there are duplicates in a list.
 (define (check-duplicates [fieldnames : (listof string)]) : ValueC
   (cond
     [(empty? fieldnames) (FalseV)]
     [(member (first fieldnames) (rest fieldnames)) (TrueV)]
     [else (check-duplicates (rest fieldnames))]))
 
+; Function to interp a list of fields.
 (define (interp-listof-fields [fields : (listof FieldC)] [env : Env] [store : Store] [acc : (listof FieldV)]): Result
   (cond 
     [(empty? fields) (v*s (ObjectV acc) store)]
     [else (type-case Result (interp-full (fieldC-value (first fields)) env store)
             [v*s (v-f s-f) (interp-listof-fields (rest fields) env s-f (cons (fieldV (fieldC-name (first fields)) v-f) acc))])]))
 
+; Helper function for interpreting getfield.
 (define (interp-getfield [fields : (listof FieldV)] [s : string] [store : Store]) : Result
   (cond 
     [(empty? fields) (interp-error (string-append "Field not found: " s))]
     [(string=? (fieldV-name (first fields)) s) (v*s (fieldV-value (first fields)) store)]
     [else (interp-getfield (rest fields) s store)]))
 
-;(define (interp-setfield [fields : (listof FieldV)] [id : symbol] [s : string] [value : ValueC] [env : Env] [store : Store] [acc : (listof FieldV)]) : Result
+; Helper function for interpreting setfield.
 (define (interp-setfield [fields : (listof FieldV)] [s : string] [value : ValueC] [env : Env] [store : Store] [acc : (listof FieldV)]) : Result  
   (cond 
-    ; In the case that the field does not exist.
+    ; In the case that the field does not exist...
     [(empty? fields) (v*s (ObjectV (cons (fieldV s value) acc)) store)]
-    ;[(empty? fields) (v*s (ObjectV (cons (fieldV s value) acc)) (let ([where (fresh-loc store)])(begin (extend-env id where env) (update-store where value store))))]
-    ; If we find the field
-    ;[(string=? (fieldV-name (first fields)) s) (v*s (ObjectV (append (rest fields) (cons (fieldV s value) acc))) (update-store (env-lookup id env) value store))]
-    ;[(string=? (fieldV-name (first fields)) s) (interp-setfield (rest fields) s value env store acc)]
+    ; If we find the field then...
     [(string=? (fieldV-name (first fields)) s) (v*s (ObjectV (append (rest fields) (cons (fieldV s value) acc))) store)]
-    ;[else (interp-setfield (rest fields) id s value env store (cons (first fields) acc))]))
+    ; Otherwise keep looking...
     [else (interp-setfield (rest fields) s value env store (cons (first fields) acc))]))
+
+; Function to create the desired number of new locations in a given store.
+(define (create-locns [numlocns : number] [acc : (listof Location)] [store : Store]) : (listof Location)
+                              (cond
+                                [(< numlocns 0) empty]
+                                [(= numlocns 0) acc]
+                                [else (create-locns (- numlocns 1) (cons (fresh-loc store) acc) store)]
+                                ))
+
+; Function to extend the given environment with a list of identifiers and locations.
+(define (extend-env-bylists [ids : (listof symbol)] [locns : (listof Location)] [env : Env]) : Env
+  (cond 
+    [(empty? ids) env]
+    [else (extend-env-bylists (rest ids) (rest locns) (extend-env (first ids) (first locns) env))]
+    ))
+
+; Function to update the given store with a list of locations and values.
+(define (update-store-bylists [locns : (listof Location)] [vals : (listof ValueC)] [store : Store]) : Store
+  (cond 
+    [(empty? locns) store]
+    [else (update-store-bylists (rest locns) (rest vals) (update-store (first locns) (first vals) store))]
+    ))
+
+; Helper function that evaluates a list of ExprC expressions to ValueC expressions.
+(define (map-interp [exprs : (listof ExprC)] [acc : (listof ValueC)] [env : Env] [store : Store]) : (listof ValueC)
+  (cond
+    [(empty? exprs) acc]
+    [else (map-interp (rest exprs) (cons (v*s-value (interp-full (first exprs) env store)) acc) env store)]))
+
+; A helper function that will apply a given function definition to a given list of parameter arguments.
+(define (Apply [func : ValueC] [args : (listof ExprC)] [env : Env] [store : Store]) : Result
+  (type-case ValueC func
+    ; Be sure that a function was passed in.
+    [ClosureV (f-args f-body f-env) 
+              ; Evaluate the parameter arguments passed in.
+              (let ([vals (map-interp args empty env store)])
+                (cond
+                  ; Check that the number of arguments passed in matches the number of parameters for the function.
+                  [(= (length args) (length f-args)) 
+                   ; Create n new locations that don't exist in store
+                   (let ([locns (create-locns (length args) empty store)])
+                     ; Evaluate body to value
+                     ; Yield v as the result of the entire expression.
+                     ; current environment to env
+                     (interp-full f-body
+                      ; add bindings to env' -> add bindings to env'
+                      ; current environment to env'
+                      (extend-env-bylists f-args locns env)
+                      ; update store' -> update store'
+                      ; current store to store'
+                      (update-store-bylists locns vals store)))]
+                  ; Throw an arity mismatch error if the number of arguments and parameters does not match.
+                  [else (interp-error "Application failed with arity mismatch")]
+                  )
+                )]
+    [else (interp-error (string-append "Applied a non-function: " (pretty-value func)))]
+    ))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -258,19 +317,22 @@
                   ; Update the store with the new value using the old enviornment location.
                   (v*s v (update-store (env-lookup id env) v s))])]
 
+    [ErrorC (expr) (type-case Result (interp-full expr env store)
+                     [v*s (v s) (interp-error (pretty-value v))])]
     
     ;[FuncC (args : (listof symbol)) (body : ExprC)()]
     [FuncC (args body) (v*s (ClosureV args body env) store)]
 
     
     ;;[AppC (func : ExprC) (args : (listof ExprC))]
-    ;[AppC (func args) ()]
     
-    [ErrorC (expr) (type-case Result (interp-full expr env store)
-                     [v*s (v s) (interp-error (pretty-value v))])]
+    [AppC (func args) 
+          ; Evaluate function to a value
+          (type-case Result (interp-full func env store)
+            [v*s (v s) (Apply v args env store)])]
     
-    [else (interp-error (string-append "Haven't covered a case yet:"
-                                       (to-string exprC)))]))
+    ;[else (interp-error (string-append "Haven't covered a case yet:" (to-string exprC)))]
+    ))
 
 
 
